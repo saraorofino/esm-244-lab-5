@@ -1,0 +1,15 @@
+---
+title: "ESM244 Lab 5"
+author: "Sara Orofino"
+date: "2/6/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(tseries)
+library(forecast)
+```
+
