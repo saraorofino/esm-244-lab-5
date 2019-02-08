@@ -5,11 +5,233 @@ date: "2/6/2019"
 output: html_document
 ---
 
+
+a. Load packages
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(tseries)
 library(forecast)
+
+
 ```
+
+b. Get data
+
+US Residential energy consumption values (Jan 1973 - Oct 2017), Trillion BTU (US Energy Information Administration)
+
+```{r, message=FALSE}
+
+energy <- read_csv("energy.csv") 
+
+```
+
+
+
+c. Create 'ts' time series data using information in the res_total column from 'energy'
+
+```{r}
+
+#Create vector of observations for time series, using energy res_total data, which is monthly data (frequency = 12), and it starts in January 1973
+
+
+res_ts <- ts(energy$res_total, frequency = 12, start = c(1973,1)) 
+
+# plot ts for exploratory graphics 
+plot(res_ts)
+
+```
+
+
+d. Decompose ts
+
+```{r}
+# Decompose the time series data - just using decompose() in base r
+
+res_dc <- decompose(res_ts)
+
+# View the breakdown of observed vs trend vs seasonal vs random 
+plot(res_dc)
+
+
+# If there are cylces outside of seasonality they would show up in the random graph of the plot
+# Pay attention to the scales because it can show whether the seasonal impacts are important on the same scale as the observed data or the trend. 
+```
+
+e. Other cool ways to present ts data 
+
+```{r}
+
+# month plot on original ts data NOT decomposed - shows how values are changing within each month 
+
+monthplot(res_ts) #shows a big increase in energy usage in summer months 
+
+
+
+```
+
+
+```{r}
+
+#ggseason plot - plots the time series within each year over the 12 months
+
+ggseasonplot(res_ts) 
+
+ggseasonplot(res_ts, polar = TRUE) # use polar = TRUE to plot a cyclical graph 
+```
+
+
+f. Simple moving averages 
+
+forecast::ma() to specify windows for moving averages 
+
+```{r}
+
+
+sma_res <- ma(res_ts, order = 5)
+plot(sma_res)
+
+# Change the window size... order = 12
+
+sma_res2 <- ma(res_ts, order = 12)
+plot(sma_res2)
+
+# Good to plot both the original ts data and the moving average together (exploratory graph)
+
+plot(res_ts)
+lines(sma_res, col = "red")
+
+```
+
+g. ACF (Autocorrelation) 
+
+```{r}
+# plots the autocorrelation for the time series data 
+res_acf <- acf(res_ts)
+
+# can see the big peaks every 12 months - strong correlation with observations that were 12 months ago
+# Seasonality is important
+
+# more information on the data (in forecasts package) ACF and PACF (partial autocorrelation)
+# can finalize just like a ggplot 
+
+ggtsdisplay(res_ts)
+```
+
+i. Forecasting with Holt-Winters exponential smoothing
+
+Note: Forecasting/smoothing will not improve the data you're working with...
+
+```{r}
+
+res_hw <- HoltWinters(res_ts)
+res_hw
+
+# Additive data; gives the alpha, beta, and gamma parameters 
+
+plot(res_hw)
+
+#The plot shows in red how the model looks compared to the actual data 
+```
+
+Now some future forecasting with Holt-Winters
+
+```{r}
+# forecasting for 5 years on a monthly timescale h = 60
+
+res_forecast <- forecast(res_hw, h = 60)
+plot(res_forecast) 
+
+#blue lines are the predictions for forecasted time; light and dark grey are showing the 80% and 95% confidence intervals 
+# can transform this to a dataframe and use to make a plot in ggplot 
+```
+
+Check distribution of residuals:
+
+```{r}
+
+# residuals will indicate normality - graph on histogram and qqplot
+
+par(mfrow = c(1,2))
+hist(res_forecast$residuals) 
+qqnorm(res_forecast$residuals)
+
+```
+
+
+Autoregressive integrated moving average (ARIMA) using auto.arima for p,d,q
+
+
+```{r}
+
+# Auto arima will give you pdq for non-season component (first) and seasonal component (second if there is one)
+
+res_pdq <- auto.arima(res_ts)
+res_pdq
+
+```
+
+Non-seasonal pdq (1,0,2)  
+Seasonal pdq (0,1,1)   
+
+
+Fit the ARIMA model using those pdq inputs:
+
+```{r}
+
+# List the non-seasonal pdq first as just order = c(p,d,q) and the seasonal second as list(order = c(p,d,q))
+
+res_arima <- arima(res_ts, order = c(1,0,2), seasonal = list(order = c(0,1,1)))
+
+#check out the residuals (exploratory)
+
+par(mfrow = c(1,2)) #Use this line of code to specify the two graphs be placed side by side
+hist(res_arima$residuals)
+qqnorm(res_arima$residuals)
+
+#Overall looks normal, not horribly skewed in either direction 
+```
+
+Now forecast with ARIMA outputs:
+
+```{r}
+# time of forecast(h) is in months because the data was collected monthly 
+
+forecast_res <- forecast(res_arima, h = 72)
+plot(forecast_res)
+
+# Notice the ARIMA looks pretty similar to the Holt-Winters; because the data is very seasonal and highly predictable so both have trends that look similar 
+
+# Would generally be a good idea to show both the ARIMA and the Holt-Winters in publication 
+```
+
+Now let's try viewing this in ggplot:
+
+```{r}
+# remember you can make the listed values from forecasting a dataframe to plot in ggplot:
+
+res_df <- data.frame(forecast_res)
+
+#Point.Forecast - the forecasted data points, H80/L80 shows the high and low of the 80% Confidence Interval
+
+month_seq <- seq(1,72) #creates a series of months from 1-72 to match the predictions that were forecasted 
+res_df_2 <- data.frame(month_seq, res_df)
+
+ggplot(res_df_2, aes(x=month_seq, y=Point.Forecast)) +
+  geom_line()
+
+# can use geom_ribbon for the confidence intervals and finalizing as necessary 
+```
+
+
+
+
+
+
+
+
+
+
+
 
